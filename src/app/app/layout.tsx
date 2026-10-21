@@ -12,6 +12,7 @@ import {
   UserRoundCog,
   LogOut,
   Repeat2,
+  ReceiptText,
 } from "lucide-react";
 
 type UserProfile = {
@@ -35,9 +36,11 @@ export default function AppLayout({
   useEffect(() => {
     let alive = true;
 
-    async function checkSession() {
-      const client = supabase;
+    // Capture the nullable Supabase client in a local constant.
+    const client = supabase;
+    let unsubscribe = () => {};
 
+    async function checkSession() {
       if (!client) {
         if (alive) setReady(true);
         return;
@@ -76,7 +79,8 @@ export default function AppLayout({
           return;
         }
 
-        if (profileData?.active === false) {
+        // Do not allow a deactivated account to continue.
+        if (profileData?.active !== true) {
           await client.auth.signOut();
 
           if (alive) {
@@ -94,9 +98,6 @@ export default function AppLayout({
     }
 
     void checkSession();
-
-    const client = supabase;
-    let unsubscribe = () => {};
 
     if (client) {
       const { data: listener } = client.auth.onAuthStateChange(
@@ -147,12 +148,18 @@ export default function AppLayout({
     ["/app/team", "Team", UserRoundCog],
   ] as const;
 
-  const nav =
-    profile?.role === "staff"
-      ? allNav.filter(
-          ([href]) => href === "/app" || href === "/app/tasks"
-        )
-      : allNav;
+  const nav = [
+    ...(
+      profile?.role === "staff"
+        ? allNav.filter(
+            ([href]) => href === "/app" || href === "/app/tasks"
+          )
+        : allNav
+    ),
+    ...(profile?.role === "partner"
+      ? ([["/app/billing", "Billing", ReceiptText]] as const)
+      : []),
+  ];
 
   const title =
     nav.find(([href]) => href === path)?.[1] ||
@@ -161,7 +168,9 @@ export default function AppLayout({
   if (!ready) {
     return (
       <div className="login-wrap">
-        <div className="panel">Checking your secure session…</div>
+        <div className="panel">
+          Checking your secure session…
+        </div>
       </div>
     );
   }
