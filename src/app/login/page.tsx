@@ -20,24 +20,22 @@ function LoginForm() {
   useEffect(() => {
     if (!supabase) return;
 
+    // Capture a non-null client for the entire async effect.
+    const client = supabase;
     let active = true;
 
     async function checkInvitation() {
-      const client = supabase;
-      if (!client) return;
-
-      // Supabase may return an invitation as a PKCE code or a
-      // token hash, depending on the Auth email configuration.
       const code = searchParams.get("code");
       const tokenHash = searchParams.get("token_hash");
       const type = searchParams.get("type");
 
       if (code) {
-        const { error } = await client.auth.exchangeCodeForSession(code);
+        const { error: exchangeError } =
+          await client.auth.exchangeCodeForSession(code);
 
         if (!active) return;
 
-        if (error) {
+        if (exchangeError) {
           setError(
             "This invitation link is invalid or expired. Ask your firm partner to send a new invitation."
           );
@@ -50,19 +48,27 @@ function LoginForm() {
       }
 
       if (tokenHash && type) {
-        const { error } = await client.auth.verifyOtp({
+        const allowedTypes = [
+          "invite",
+          "signup",
+          "magiclink",
+          "recovery",
+          "email",
+        ] as const;
+
+        if (!allowedTypes.includes(type as (typeof allowedTypes)[number])) {
+          setError("This invitation link has an unsupported type.");
+          return;
+        }
+
+        const { error: verifyError } = await client.auth.verifyOtp({
           token_hash: tokenHash,
-          type: type as
-            | "invite"
-            | "signup"
-            | "magiclink"
-            | "recovery"
-            | "email",
+          type: type as (typeof allowedTypes)[number],
         });
 
         if (!active) return;
 
-        if (error) {
+        if (verifyError) {
           setError(
             "This invitation link is invalid or expired. Ask your firm partner to send a new invitation."
           );
@@ -74,13 +80,13 @@ function LoginForm() {
         return;
       }
 
-      // Supabase implicit-flow links can return tokens in the URL hash.
       if (window.location.hash.includes("access_token=")) {
-        const { data, error } = await client.auth.getSession();
+        const { data, error: sessionError } =
+          await client.auth.getSession();
 
         if (!active) return;
 
-        if (error || !data.session) {
+        if (sessionError || !data.session) {
           setError(
             "Unable to verify this invitation. Please ask your firm partner for a new link."
           );
@@ -89,6 +95,16 @@ function LoginForm() {
 
         setMode("setup");
         setMessage("Invitation verified. Set a password for your account.");
+        return;
+      }
+
+      const { data, error: sessionError } = await client.auth.getSession();
+
+      if (!active || sessionError || !data.session) return;
+
+      if (type === "invite" || type === "recovery") {
+        setMode("setup");
+        setMessage("Set a password for your account.");
       }
     }
 
@@ -96,14 +112,12 @@ function LoginForm() {
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange((event, session) => {
+    } = client.auth.onAuthStateChange((event) => {
       if (!active) return;
 
-      if (
-        event === "PASSWORD_RECOVERY" ||
-        (session && searchParams.get("type") === "invite")
-      ) {
+      if (event === "PASSWORD_RECOVERY") {
         setMode("setup");
+        setMessage("Set a new password for your account.");
       }
     });
 
@@ -113,7 +127,7 @@ function LoginForm() {
     };
   }, [searchParams]);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setMessage("");
@@ -186,9 +200,7 @@ function LoginForm() {
         </div>
 
         <h1 style={{ marginTop: 28 }}>
-          {mode === "setup"
-            ? "Set your password"
-            : "Sign in to your firm"}
+          {mode === "setup" ? "Set your password" : "Sign in to your firm"}
         </h1>
 
         <p>
@@ -220,21 +232,15 @@ function LoginForm() {
           </>
         )}
 
-        <label>
-          {mode === "setup" ? "New password" : "Password"}
-        </label>
+        <label>{mode === "setup" ? "New password" : "Password"}</label>
         <input
           type="password"
-          autoComplete={
-            mode === "setup" ? "new-password" : "current-password"
-          }
+          autoComplete={mode === "setup" ? "new-password" : "current-password"}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={mode === "setup" ? 8 : undefined}
-          placeholder={
-            mode === "setup" ? "At least 8 characters" : "Your password"
-          }
+          placeholder={mode === "setup" ? "At least 8 characters" : "Your password"}
         />
 
         {mode === "setup" && (
@@ -280,8 +286,8 @@ function LoginForm() {
 
         {mode === "login" && (
           <p className="small" style={{ marginTop: 18 }}>
-            Accounts must be invited by a firm administrator. Public
-            sign-up is not enabled.
+            Accounts must be invited by a firm administrator. Public sign-up
+            is not enabled.
           </p>
         )}
       </form>
