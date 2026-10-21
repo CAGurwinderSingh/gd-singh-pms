@@ -1,0 +1,8 @@
+ "use client";
+import { useState } from "react";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
+export default function LoginPage(){
+ const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [error,setError]=useState(""); const [busy,setBusy]=useState(false);
+ async function submit(e:React.FormEvent){e.preventDefault();setError("");if(!supabase){setError("Supabase is not configured. Follow the README setup steps.");return}setBusy(true);const {error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)setError(error.message);else window.location.href="/app"}
+ return <main className="login-wrap"><form className="login-card" onSubmit={submit}><div className="brand" style={{color:"#14243e",padding:0}}>GD SINGH PMS<small style={{color:"#68758a"}}>PRACTICE MANAGEMENT</small></div><h1 style={{marginTop:28}}>Sign in to your firm</h1><p>Internal access for authorised partners and staff.</p>{!supabaseConfigured&&<div className="error">Setup required: configure your Supabase project URL and anon key in <code>.env.local</code>.</div>}{error&&<div className="error">{error}</div>}<label>Email address</label><input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@firm.com"/><label>Password</label><input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Your password"/><button disabled={busy}>{busy?"Signing in…":"Sign in securely"}</button><p className="small" style={{marginTop:18}}>Accounts must be invited by a firm administrator in the configured authentication provider. Public sign-up is not enabled.</p></form></main>
+}
