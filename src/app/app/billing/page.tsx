@@ -76,7 +76,8 @@ export default function BillingPage() {
   const taskLines: Line[] = selectedTaskIds.map(id => {
     const task=tasks.find(t=>t.id===id)!;
     const rate=rates.find(r=>r.active && r.task_category.toLowerCase()===task.category.toLowerCase());
-    return {key:task.id,task_id:task.id,line_type:"service",description:task.title, sac_code:rate?.sac_code||"",hsn_code:rate?.hsn_code||"",quantity:"1",unit_rate:String(rate?.default_fee??0),discount_amount:"0",gst_rate:String(rate?.gst_rate??18),tax_treatment:"taxable",expense_date:"",receipt_reference:"",pure_agent_claimed:false};
+    const saved=(task as any);
+    return {key:task.id,task_id:task.id,line_type:"service",description:saved.task_service_name||task.title, sac_code:saved.task_sac_code||rate?.sac_code||"",hsn_code:rate?.hsn_code||"",quantity:"1",unit_rate:String(saved.professional_fee??rate?.default_fee??0),discount_amount:"0",gst_rate:String(saved.task_gst_rate??rate?.gst_rate??18),tax_treatment:"taxable",expense_date:"",receipt_reference:"",pure_agent_claimed:false};
   });
   const lines=[...taskLines,...expenseLines];
   const totals=useMemo(()=>lines.reduce((a,l)=>{const base=Math.max(0,Number(l.quantity||0)*Number(l.unit_rate||0)-Number(l.discount_amount||0));const rate=l.tax_treatment==="taxable"?Number(l.gst_rate||0):0;const intra=activeRegistration && posCode && activeRegistration.state_code===posCode;const tax=base*rate/100; a.subtotal+=Number(l.quantity||0)*Number(l.unit_rate||0);a.discount+=Number(l.discount_amount||0);a.taxable+=base;if(intra){a.cgst+=tax/2;a.sgst+=tax/2}else a.igst+=tax;return a;},{subtotal:0,discount:0,taxable:0,cgst:0,sgst:0,igst:0}),[lines,activeRegistration,posCode]);
@@ -109,7 +110,7 @@ export default function BillingPage() {
   async function loadTasks(id:string) {
     setTasks([]);setBilledTaskIds([]);setSelectedTaskIds([]);
     if(!supabase||!id)return;
-    const {data,error}=await supabase.from("tasks").select("id,task_code,title,category,client_id,completed_at,acknowledgement_number").eq("client_id",id).eq("status","completed").order("completed_at",{ascending:false});
+    const {data,error}=await supabase.from("tasks").select("id,task_code,title,category,client_id,completed_at,acknowledgement_number,service_id,task_service_name,professional_fee,task_sac_code,task_gst_rate").eq("client_id",id).eq("status","completed").order("completed_at",{ascending:false});
     if(error){setError(error.message);return;}
     const taskRows=(data||[]) as TaskRow[];
     const {data:linked, error:lineError}=await supabase.from("billing_invoice_lines").select("task_id,billing_invoices!inner(status)").not("task_id","is",null).in("billing_invoices.status",["draft","issued"]);
